@@ -1,4 +1,4 @@
 # Project Title Here
-Working repository of Team # ___'s submission to the Citadel-Correlation One Summer Invitational Datathon 2022
+Working repository of Team #1's submission to the Citadel-Correlation One Summer Invitational Datathon 2022
 
-Team Members: *Anirudh Cowlagi, Daniel Mistrik, Michael Wang, Shariar Vaez-Ghaemi* 
+Team Members: *Anirudh Cowlagi, Daniel Mistrik, Shariar Vaez-Ghaemi, Michael Wang* 
