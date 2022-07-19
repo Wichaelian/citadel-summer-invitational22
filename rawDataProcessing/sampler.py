@@ -85,8 +85,12 @@ def create_sample(field_index, granularity, reduction, source_path, dest_path, s
             passedFirst = False
 
             for row in csv_reader:
-                if not passedFirst or len(row) <= field_index:
+                if not passedFirst:
+                    csv_writer.writerow(row)
                     passedFirst = True
+                    continue
+                
+                if len(row) <= field_index:
                     continue
                 curVal = row[field_index]
                 if len(curVal) > 0:
