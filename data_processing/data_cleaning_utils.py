@@ -1,10 +1,11 @@
-from typing import List
+from typing import List, Tuple
 import zipcodes
 import pandas as pd
 import numpy as np
 import datetime
 
-def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str], categorical_cols: List[str], one_hot_threshold: int = 10) -> pd.DataFrame: 
+def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str], 
+        categorical_cols: List[str], one_hot_threshold: int = 30) -> Tuple[pd.DataFrame, List[str], List[str]] : 
     """Utility function that takes in a dataframe with the same columns as a "Lending_Club_Accepted_2014_2018.csv" and 
     applies various pre-processing
         stages to handle null values, encode categorical variables, and retrieve longitude information from zipcodes.
@@ -12,15 +13,21 @@ def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str], catego
     Args:
         accepted_df (pd.DataFrame): A dataframe with the same columns as "Lending_Club_Accepted_2014_2018.csv"
         numerical_cols (List[str]): A list of strings containing the names of numerical columns whose null values are to be median imputed,
-        besides those already modified
+        besides those already modified (zip code included here)
         categorical_cols (List[str]): A list of strings containing the names of categorical columns that are to be encoded using one hot
         encoding if the number of unique values is less than or equal to one_hot_threshold, and label encoded otherwise. 
         one_hot_threshold (int): Number of unique vals in categorical column above which labels are label encoded
 
     Returns:
-        pd.DataFrame: An in-place cleaned version of the input dataframe
+        accepted_df (pd.DataFrame): An in-place cleaned version of the input dataframe
+        numeric_cols_out (List[str]): Names of numerical columns retained from original numerical_cols
+        categorical_cols_out (List[str]): Names of categorical columns retained from original categorical_cols
+
         
     """ 
+    numeric_cols_out = set(numeric_cols)
+    categorical_cols_out = set(categorical_cols)
+
     cached_state_dtis = {}
     def replace_dti(dti, state):
         if dti != np.nan and dti <= 90:
@@ -35,26 +42,22 @@ def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str], catego
     # Replace no DTI with average DTI of corresponding state 
     # Also replace DTI > 90 as there seem to be spurious values in the dataset
     accepted_df["dti"] = accepted_df.apply(lambda x: replace_dti(x["dti"], x["addr_state"]), axis = 1)
-    
 
-    # Replace no description with "No Description"
-    accepted_df["desc"] = accepted_df["desc"].fillna(value="No Description")
-    accepted_df["desc"] = accepted_df["desc"].astype(str) 
+    # Replace no emp_length with < 1 year
 
-    # Replace no emp_length with No Record
-    accepted_df["emp_length"] = accepted_df["desc"].fillna(value="No Record")
+    emp_to_index = {"< 1 year": 0, "1 year": 1}
+    for i in range(2, 11):
+        if (i == 10):
+            emp_to_index["10+ years"] = 10
+        else:
+            emp_to_index[f"{i} years"] = i
+ 
+    accepted_df["emp_length"] = accepted_df["emp_length"].fillna(value="< 1 year")
+    accepted_df["emp_length"] = accepted_df["emp_length"].apply(lambda x: emp_to_index[x])
 
     # Replace no emp_title with "No Employment"
     accepted_df["emp_title"] = accepted_df["emp_title"].fillna(value="No Employment")
     accepted_df["emp_title"] = accepted_df["emp_title"].astype(str) 
-
-    # Replace no hardship_type with "No Hardship"
-    accepted_df["hardship_type"] = accepted_df["hardship_type"].fillna(value="No Hardship")
-    accepted_df["hardship_type"] = accepted_df["hardship_type"].astype(str) 
-
-    # Replace no hardship_reason with "No Hardship"
-    accepted_df["hardship_reason"] = accepted_df["hardship_reason"].fillna(value="No Hardship")
-    accepted_df["hardship_reason"] = accepted_df["hardship_reason"].astype(str) 
 
     cached_zips = {}
     # Convert zip code to longitude latitude estimate, use a cache to avoid repeated searching
@@ -71,15 +74,13 @@ def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str], catego
     accepted_df["zip_code"] = accepted_df["zip_code"].str.rstrip('xx')
     accepted_df["lat"] = accepted_df["zip_code"].apply(lambda x: get_coords(x, mode = "lat"))
     accepted_df["long"] = accepted_df["zip_code"].apply(lambda x: get_coords(x, mode = "long"))
-    
-        
+      
     # Replace date fields with days since 01-01-2014
     # Replace missing values in mths_since cols with max value of column*10
     # Replace all other missing numerical fields with 0 (these are fields like "total balance of installment accounts" 
     # which are nan if the borrower has no other installment accounts)
 
-    numeric_cols_out = set(numeric_cols)
-    for num_col in numeric_cols:
+    for num_col in numeric_cols_out:
         if (num_col[-2:]) == "_d":
             accepted_df[num_col] = (pd.to_datetime(accepted_df[num_col]) - datetime.datetime(2014,1,1)).dt.days.astype('float64')
         elif ("mths_since" in num_col):
@@ -88,7 +89,7 @@ def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str], catego
         accepted_df[num_col] = accepted_df[num_col].fillna(value=accepted_df[num_col].median())
 
     # Encode categorical vars using one hot if < 10 vars, else label encode (force label encoding on loan_status)
-    # For the state column, we label encode using the GDP per capita
+    # For the state column, we label encode using the state's GDP per capita
 
     state_to_index = {"DC": 1, "NY": 2, "MA": 3, "WA": 4, "CA": 5, "CT": 6, "ND": 7, "DE": 8, "NE": 9, "AK": 10, 
                       "IL": 11, "CO": 12, "NJ": 13, "MN": 14, "WY": 15, "MD": 16, "NH": 17, "IA": 18, "VA": 19, "SD": 20,
@@ -96,11 +97,11 @@ def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str], catego
                       "IN": 31, "NV": 32, "RI": 33, "TN": 34, "MO": 35, "MI": 36, "AZ": 37, "FL": 38, "VT": 39, "ME": 40,
                       "LA": 41, "MT": 42, "SC": 43, "KY": 44, "OK": 45, "NM": 46, "ID": 47, "AL": 48, "WV": 49, "AR": 50, "MS": 51}
 
-    categorical_cols_out = set(categorical_cols)
+    accepted_df["addr_state"] = accepted_df["addr_state"].apply(lambda x: state_to_index[x])
+
     for cat_col in categorical_cols:
-        if (cat_col == "desc"):
+        if (cat_col == "emp_length" or cat_col == "addr_state"):
             continue
-        
         nuniquecol = accepted_df[cat_col].nunique()
         if nuniquecol <= one_hot_threshold or cat_col == "loan_status":
             one_hot = pd.get_dummies(accepted_df[cat_col], prefix = cat_col)
@@ -108,11 +109,8 @@ def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str], catego
             categorical_cols_out.remove(cat_col)
             accepted_df = accepted_df.join(one_hot)
         else: 
-            if (cat_col == "addr_state"):
-                accepted_df["addr_state"] = accepted_df["addr_state"].apply(lambda x: state_to_index[x])
-            else:
-                accepted_df[cat_col] = accepted_df[cat_col].astype('category')
-                accepted_df[cat_col] = accepted_df[cat_col].cat.codes
+            accepted_df[cat_col] = accepted_df[cat_col].astype('category')
+            accepted_df[cat_col] = accepted_df[cat_col].cat.codes
 
     accepted_df.drop(["zip_code"], axis = 1, inplace= True)
     numeric_cols_out.remove("zip_code")
