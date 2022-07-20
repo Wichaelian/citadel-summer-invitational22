@@ -15,7 +15,7 @@ def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str],
         numerical_cols (List[str]): A list of strings containing the names of numerical columns whose null values are to be median imputed,
         besides those already modified (zip code included here)
         categorical_cols (List[str]): A list of strings containing the names of categorical columns that are to be encoded using one hot
-        encoding if the number of unique values is less than or equal to one_hot_threshold, and label encoded otherwise. 
+        encoding if the number of unique values is less than or equal to one_hot_threshold, and label encoded otherwise.
         one_hot_threshold (int): Number of unique vals in categorical column above which labels are label encoded
 
     Returns:
@@ -57,7 +57,7 @@ def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str],
 
     # Replace no emp_title with "No Employment"
     accepted_df["emp_title"] = accepted_df["emp_title"].fillna(value="No Employment")
-    accepted_df["emp_title"] = accepted_df["emp_title"].astype(str) 
+    accepted_df["emp_title"] = accepted_df["emp_title"].astype(str)
 
     cached_zips = {}
     # Convert zip code to longitude latitude estimate, use a cache to avoid repeated searching
@@ -68,7 +68,7 @@ def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str],
             matches = zipcodes.similar_to(zip_code)
             if (len(matches) > 0):
                 cached_zips[zip_code] = [float(matches[0]['lat']), float(matches[0]['long'])]
-        
+
         return cached_zips[zip_code][0 if mode == "lat" else 1]
 
     accepted_df["zip_code"] = accepted_df["zip_code"].str.rstrip('xx')
@@ -108,7 +108,7 @@ def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str],
             accepted_df = accepted_df.drop(cat_col,axis = 1)
             categorical_cols_out.remove(cat_col)
             accepted_df = accepted_df.join(one_hot)
-        else: 
+        else:
             accepted_df[cat_col] = accepted_df[cat_col].astype('category')
             accepted_df[cat_col] = accepted_df[cat_col].cat.codes
 
@@ -118,3 +118,4 @@ def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str],
     accepted_df.columns = ['_'.join(x.lower().split()) for x in accepted_df.columns]
 
     return accepted_df, list(numeric_cols_out), list(categorical_cols_out)
+s
