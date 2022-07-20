@@ -137,6 +137,7 @@ with open('../rawFiles/Lending_Club_Accepted_2014_2018.csv', encoding='utf-8') a
 
 buckets = [buckets[i]/totalVal for i in range(len(buckets))]
 """
+"""
 bucket_granularity = 100
 #minVal, maxVal, totalSum, orgDist = getDistributionByField(3, bucket_granularity, '../rawFiles/Lending_Club_Accepted_2014_2018.csv')
 minVal = 1000.0
@@ -163,7 +164,7 @@ x_coords = np.arange(bucket_granularity)
 plt.bar(x_coords, newDist, align = 'center', label = 'new')
 plt.show()
 
-
+"""
 """
 with open('../rawFiles/Lending_Club_Accepted_2014_2018.csv', encoding='utf-8') as csv_input:
     with open('test.csv','w') as csv_output:
@@ -200,4 +201,45 @@ buckets = [buckets[i]/totalVal for i in range(len(buckets))]
 x_coords = np.arange(bucket_granularity)
 plt.bar(x_coords, buckets, align = 'center')
 plt.show()
+"""
+
+"""
+
+rawDF = pd.read_csv("test_files/sample_by_loan_amt.csv")
+cleanDF = dcu.clean_accepted_df(rawDF, [], [])
+
+candidateRows = []
+
+# Excluding Fields with a large number of unknown values
+for col in cleanDF:
+    if cleanDF[col].isna().sum() < len(cleanDF[col])/2:
+        candidateRows.append(col)
+
+
+strongestVal = (0,-2)
+
+for k in range(1, 9):
+    kmeans = KMeans(n_clusters=k).fit(cleanDF[['funded_amnt', 'last_fico_range_high']])
+    score = silhouette_score(cleanDF[['funded_amnt', 'last_fico_range_high']], kmeans.labels_)
+    if score > strongestVal[1]:
+        strongestVal = (k, score)
+
+if (k == 1):
+    print("Clustering doesn't have meaningful differences")
+
+print(strongestVal)
+
+'''
+centroids = kmeans.cluster_centers_
+
+plt.scatter(cleanDF['funded_amnt'], cleanDF['last_fico_range_high'], s=50, alpha=0.5)
+plt.scatter(centroids[:, 0], centroids[:, 1], c='red', s=50)
+plt.show()
+
+for i in range(len(candidateRows)):
+    for j in range(i+1, len(candidateRows)):
+        pass
+
+'test_files/sample_by_loan_amt.csv'
+
 """

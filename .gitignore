@@ -131,3 +131,6 @@ dmypy.json
 # Ignoring large raw files
 data/
 rawFiles/
+
+#Ignoring tinkering files
+data_processing/rawDataExploration.py
