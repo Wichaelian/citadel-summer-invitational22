@@ -118,4 +118,3 @@ def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str],
     accepted_df.columns = ['_'.join(x.lower().split()) for x in accepted_df.columns]
 
     return accepted_df, list(numeric_cols_out), list(categorical_cols_out)
-s
