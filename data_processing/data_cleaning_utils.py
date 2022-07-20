@@ -79,7 +79,6 @@ def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str], catego
     accepted_df.columns = ['_'.join(x.lower().split()) for x in accepted_df.columns]
 
 
-
     # Convert any date values to days since 01 January 2014
 
     # Get every date column
