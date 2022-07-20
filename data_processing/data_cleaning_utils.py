@@ -2,6 +2,7 @@ from typing import List
 import zipcodes
 import pandas as pd
 import numpy as np
+import datetime
 
 def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str], categorical_cols: List[str], one_hot_threshold: int = 10) -> pd.DataFrame: 
     """Utility function that takes in a dataframe with the same columns as a "Lending_Club_Accepted_2014_2018.csv" and 
@@ -18,10 +19,23 @@ def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str], catego
 
     Returns:
         pd.DataFrame: An in-place cleaned version of the input dataframe
-    """    
-    # Replace no DTI with average DTI -- should use something better here...
-    accepted_df["dti"] = accepted_df["dti"].fillna(value=accepted_df["dti"].mean())
-    accepted_df["dti"] = accepted_df["dti"].astype('float64') 
+        
+    """ 
+    cached_state_dtis = {}
+    def replace_dti(dti, state):
+        if dti != np.nan and dti <= 90:
+            return dti
+        elif state not in cached_state_dtis:
+            cached_state_dtis[state] = accepted_df[accepted_df["addr_state"] == state]["dti"].mean()
+            if cached_state_dtis[state] == np.nan:
+                cached_state_dtis[state] == accepted_df["dti"].mean()
+        
+        return cached_state_dtis[state]
+            
+    # Replace no DTI with average DTI of corresponding state 
+    # Also replace DTI > 90 as there seem to be spurious values in the dataset
+    accepted_df["dti"] = accepted_df.apply(lambda x: replace_dti(x["dti"], x["addr_state"]), axis = 1)
+    
 
     # Replace no description with "No Description"
     accepted_df["desc"] = accepted_df["desc"].fillna(value="No Description")
@@ -59,22 +73,50 @@ def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str], catego
     accepted_df["long"] = accepted_df["zip_code"].apply(lambda x: get_coords(x, mode = "long"))
     
         
-    # Replace all other missing numerical fields with median
+    # Replace date fields with days since 01-01-2014
+    # Replace missing values in mths_since cols with max value of column*10
+    # Replace all other missing numerical fields with 0 (these are fields like "total balance of installment accounts" 
+    # which are nan if the borrower has no other installment accounts)
+
+    numeric_cols_out = set(numeric_cols)
     for num_col in numeric_cols:
+        if (num_col[-2:]) == "_d":
+            accepted_df[num_col] = (pd.to_datetime(accepted_df[num_col]) - datetime.datetime(2014,1,1)).dt.days.astype('float64')
+        elif ("mths_since" in num_col):
+            accepted_df[num_col] = accepted_df[num_col].fillna(value=accepted_df[num_col].max()*10)
+        
         accepted_df[num_col] = accepted_df[num_col].fillna(value=accepted_df[num_col].median())
 
     # Encode categorical vars using one hot if < 10 vars, else label encode (force label encoding on loan_status)
+    # For the state column, we label encode using the GDP per capita
+
+    state_to_index = {"DC": 1, "NY": 2, "MA": 3, "WA": 4, "CA": 5, "CT": 6, "ND": 7, "DE": 8, "NE": 9, "AK": 10, 
+                      "IL": 11, "CO": 12, "NJ": 13, "MN": 14, "WY": 15, "MD": 16, "NH": 17, "IA": 18, "VA": 19, "SD": 20,
+                      "TX": 21, "UT": 22, "KS": 23, "PA": 24, "GA": 25, "OR": 26, "OH": 27, "HI": 28, "NC": 29, "WI": 30,
+                      "IN": 31, "NV": 32, "RI": 33, "TN": 34, "MO": 35, "MI": 36, "AZ": 37, "FL": 38, "VT": 39, "ME": 40,
+                      "LA": 41, "MT": 42, "SC": 43, "KY": 44, "OK": 45, "NM": 46, "ID": 47, "AL": 48, "WV": 49, "AR": 50, "MS": 51}
+
+    categorical_cols_out = set(categorical_cols)
     for cat_col in categorical_cols:
+        if (cat_col == "desc"):
+            continue
+        
         nuniquecol = accepted_df[cat_col].nunique()
         if nuniquecol <= one_hot_threshold or cat_col == "loan_status":
             one_hot = pd.get_dummies(accepted_df[cat_col], prefix = cat_col)
             accepted_df = accepted_df.drop(cat_col,axis = 1)
+            categorical_cols_out.remove(cat_col)
             accepted_df = accepted_df.join(one_hot)
         else: 
-            accepted_df[cat_col] = accepted_df[cat_col].astype('category')
-            accepted_df[cat_col] = accepted_df[cat_col].cat.codes
+            if (cat_col == "addr_state"):
+                accepted_df["addr_state"] = accepted_df["addr_state"].apply(lambda x: state_to_index[x])
+            else:
+                accepted_df[cat_col] = accepted_df[cat_col].astype('category')
+                accepted_df[cat_col] = accepted_df[cat_col].cat.codes
 
     accepted_df.drop(["zip_code"], axis = 1, inplace= True)
+    numeric_cols_out.remove("zip_code")
+
     accepted_df.columns = ['_'.join(x.lower().split()) for x in accepted_df.columns]
-    
-    return accepted_df
+
+    return accepted_df, list(numeric_cols_out), list(categorical_cols_out)
