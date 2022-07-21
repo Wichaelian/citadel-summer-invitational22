@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import datetime
 
 def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str], 
-        categorical_cols: List[str], one_hot_threshold: int = 30) -> Tuple[pd.DataFrame, List[str], List[str]] : 
+        categorical_cols: List[str], one_hot_threshold: int = 30, transform_zips = True) -> Tuple[pd.DataFrame, List[str], List[str]] : 
     """Utility function that takes in a dataframe with the same columns as a "Lending_Club_Accepted_2014_2018.csv" and 
     applies various pre-processing
         stages to handle null values, encode categorical variables, and retrieve longitude information from zipcodes.
@@ -74,10 +74,14 @@ def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str],
 
         return cached_zips[zip_code][0 if mode == "lat" else 1]
 
-    accepted_df["zip_code"] = accepted_df["zip_code"].str.rstrip('xx')
-    accepted_df["lat"] = accepted_df["zip_code"].apply(lambda x: get_coords(x, mode = "lat"))
-    accepted_df["long"] = accepted_df["zip_code"].apply(lambda x: get_coords(x, mode = "long"))
-      
+    #print(accepted_df.columns)
+    if (transform_zips == True):
+        accepted_df["zip_code"] = accepted_df["zip_code"].str.rstrip('xx')
+        accepted_df["lat"] = accepted_df["zip_code"].apply(lambda x: get_coords(x, mode = "lat"))
+        accepted_df["long"] = accepted_df["zip_code"].apply(lambda x: get_coords(x, mode = "long"))
+
+    accepted_df.drop(["zip_code"], axis = 1, inplace= True)
+    numeric_cols_out.remove("zip_code")
     # Replace date fields with days since 01-01-2014
     # Replace missing values in mths_since cols with max value of column*10
     # Replace all other missing numerical fields with 0 (these are fields like "total balance of installment accounts" 
@@ -101,22 +105,29 @@ def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str],
                       "LA": 41, "MT": 42, "SC": 43, "KY": 44, "OK": 45, "NM": 46, "ID": 47, "AL": 48, "WV": 49, "AR": 50, "MS": 51}
 
     accepted_df["addr_state"] = accepted_df["addr_state"].apply(lambda x: state_to_index[x])
+    
+    sorted_sub_grades = accepted_df["sub_grade"].unique()
+    sorted_sub_grades.sort()
+    sub_grade_to_val = {}
+    for i, grade in enumerate(sorted_sub_grades):
+        sub_grade_to_val[grade] = i
+
+    accepted_df["sub_grade"] = accepted_df["sub_grade"].apply(lambda x: sub_grade_to_val[x])
 
     for cat_col in categorical_cols:
         if (cat_col == "emp_length" or cat_col == "addr_state"):
             continue
         nuniquecol = accepted_df[cat_col].nunique()
         if nuniquecol <= one_hot_threshold or cat_col == "loan_status" or cat_col == "sub_grade":
+            print(cat_col)
             one_hot = pd.get_dummies(accepted_df[cat_col], prefix = cat_col)
-            accepted_df = accepted_df.drop(cat_col,axis = 1)
-            categorical_cols_out.remove(cat_col)
+            if (cat_col != "sub_grade"):
+                accepted_df = accepted_df.drop(cat_col,axis = 1)
+                categorical_cols_out.remove(cat_col)
             accepted_df = accepted_df.join(one_hot)
         else:
             accepted_df[cat_col] = accepted_df[cat_col].astype('category')
             accepted_df[cat_col] = accepted_df[cat_col].cat.codes
-
-    accepted_df.drop(["zip_code"], axis = 1, inplace= True)
-    numeric_cols_out.remove("zip_code")
 
     accepted_df.columns = ['_'.join(x.lower().split()) for x in accepted_df.columns]
 
@@ -134,11 +145,22 @@ Args:
     dest_path - The destination path for the modified csv file
     numeric_cols , categorical_cols - Refer to the documentation for data_cleaning_utils
 """
-def cluster_create(col_names, source_path, dest_path, numeric_cols = [], categorical_cols = []):
+def cluster_create(col_names, source_path, dest_path, 
+                    numeric_cols = list(set([
+                    "loan_amnt", "funded_amnt", "funded_amnt_inv", "int_rate", "installment", "issue_d", "annual_inc", "dti", "fico_range_low", "fico_range_high", 
+                    "revol_bal", "revol_util", "open_acc", "zip_code", "delinq_2yrs", "inq_last_6mths", "total_acc", "mths_since_last_delinq", "mths_since_last_record", "mths_since_rcnt_il",
+                    "last_credit_pull_d", "open_il_12m", "open_il_24m", "total_bal_il", "il_util", "open_rv_12m", "open_rv_24m", "max_bal_bc", "all_util",
+                    "total_rev_hi_lim", "inq_fi", "total_cu_tl", "inq_last_12m", "acc_open_past_24mths", "avg_cur_bal", "bc_open_to_buy", "bc_util", "num_accts_ever_120_pd",
+                    "num_actv_bc_tl", "num_actv_rev_tl", "num_bc_sats", "num_bc_tl", "num_sats", "num_il_tl", "num_op_rev_tl", "num_rev_accts", "num_rev_tl_bal_gt_0", "tot_hi_cred_lim", 
+                    "pct_tl_nvr_dlq", "percent_bc_gt_75", "total_bal_ex_mort", "total_bc_limit","total_il_high_credit_limit", "mths_since_last_major_derog", "mths_since_recent_bc",
+                    "mths_since_recent_bc_dlq", "mths_since_recent_inq", "mths_since_recent_revol_delinq"
+                    ])), 
+                    categorical_cols = ["term", "grade", "sub_grade", "emp_title", "emp_length", "home_ownership", "verification_status", "purpose", "addr_state", 
+                    "initial_list_status", "application_type", "hardship_flag", "loan_status"]):
     raw_df = pd.read_csv(source_path)
     raw_df = raw_df[numeric_cols + categorical_cols]
     # Clean raw csv
-    clean_df, numeric_cols, categorical_cols = clean_accepted_df(raw_df, numeric_cols, categorical_cols)
+    clean_df, numeric_cols, categorical_cols = clean_accepted_df(raw_df, numeric_cols, categorical_cols, one_hot_threshold = 30, transform_zips = False)
 
     strongest_val = (0,-2 , -1, -1)
 
@@ -150,12 +172,13 @@ def cluster_create(col_names, source_path, dest_path, numeric_cols = [], categor
                 score = silhouette_score(clean_df[[col_names[i], col_names[j]]], kmeans.labels_)
                 if score > strongest_val[1]:
                     strongest_val = (k, score, i , j)
+                
+
 
 
     # Recalculating the strongest clustering in lieu of storing all of them due to memory constraints
     kmeans = KMeans(n_clusters=strongest_val[0]).fit(clean_df[[col_names[strongest_val[2]], col_names[strongest_val[3]]]])
     clean_df['cluster'] = kmeans.labels_
-
 
     clean_df.to_csv(dest_path)
 
@@ -163,6 +186,7 @@ def cluster_create(col_names, source_path, dest_path, numeric_cols = [], categor
      str(strongest_val[1]) + " between columns: " + col_names[2] + " and " +\
       col_names[3] + " at a k-value of:" + str(strongest_val[0]))
 
+    return clean_df
 
 #cluster_create(["loan_amnt", "last_fico_range_high"], "test_files/sample_by_loan_amt.csv", "test_files/testClustering.csv")
 
