@@ -58,6 +58,8 @@ def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str],
     accepted_df["emp_length"] = accepted_df["emp_length"].fillna(value="< 1 year")
     accepted_df["emp_length"] = accepted_df["emp_length"].apply(lambda x: emp_to_index[x])
 
+    
+
     # Replace no emp_title with "No Employment"
     accepted_df["emp_title"] = accepted_df["emp_title"].fillna(value="No Employment")
     accepted_df["emp_title"] = accepted_df["emp_title"].astype(str)
@@ -83,7 +85,7 @@ def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str],
     accepted_df.drop(["zip_code"], axis = 1, inplace= True)
     numeric_cols_out.remove("zip_code")
     # Replace date fields with days since 01-01-2014
-    # Replace missing values in mths_since cols with max value of column*10
+    # Replace missing values in mths_since cols with max value of column
     # Replace all other missing numerical fields with 0 (these are fields like "total balance of installment accounts" 
     # which are nan if the borrower has no other installment accounts)
 
@@ -91,9 +93,12 @@ def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str],
         if (num_col[-2:]) == "_d":
             accepted_df[num_col] = (pd.to_datetime(accepted_df[num_col]) - datetime.datetime(2014,1,1)).dt.days.astype('float64')
         elif ("mths_since" in num_col):
-            accepted_df[num_col] = accepted_df[num_col].fillna(value=accepted_df[num_col].max()*10)
+            accepted_df[num_col] = accepted_df[num_col].fillna(value=accepted_df[num_col].max() + 1)
         
         accepted_df[num_col] = accepted_df[num_col].fillna(value=accepted_df[num_col].median())
+
+    # Record log of income
+
 
     # Encode categorical vars using one hot if < 10 vars, else label encode (force label encoding on loan_status)
     # For the state column, we label encode using the state's GDP per capita
@@ -118,7 +123,7 @@ def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str],
         if (cat_col == "emp_length" or cat_col == "addr_state"):
             continue
         nuniquecol = accepted_df[cat_col].nunique()
-        if nuniquecol <= one_hot_threshold or cat_col == "loan_status" or cat_col == "sub_grade":
+        if 2 < nuniquecol <= one_hot_threshold or cat_col == "loan_status" or cat_col == "sub_grade":
             print(cat_col)
             one_hot = pd.get_dummies(accepted_df[cat_col], prefix = cat_col)
             if (cat_col != "sub_grade"):
@@ -128,7 +133,7 @@ def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str],
         else:
             accepted_df[cat_col] = accepted_df[cat_col].astype('category')
             accepted_df[cat_col] = accepted_df[cat_col].cat.codes
-
+    
     accepted_df.columns = ['_'.join(x.lower().split()) for x in accepted_df.columns]
 
     return accepted_df, list(numeric_cols_out), list(categorical_cols_out)
