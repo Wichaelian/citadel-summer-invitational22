@@ -89,7 +89,7 @@ def create_sample(field_index, granularity, reduction, source_path, dest_path, s
                     csv_writer.writerow(row)
                     passedFirst = True
                     continue
-                
+
                 if len(row) <= field_index:
                     continue
                 curVal = row[field_index]
@@ -111,7 +111,7 @@ def create_sample(field_index, granularity, reduction, source_path, dest_path, s
 
 if __name__ == '__main__' :
     parser = argparse.ArgumentParser(description='Sampling the provided file by provided field index. (i.e. python sampler.py --field_index 3'+\
-    ' --granularity 50 --reduction 50 --source_path "../rawFiles/Lending_Club_Rejected_2014_2018.csv" --dest_path "test.csv" --random)')
+    ' --granularity 50 --reduction 50 --source_path "../rawFiles/Lending_Club_Rejected_2014_2018.csv" --dest_path "test.csv")')
     parser.add_argument('--field_index', help='Index of the NUMERIC field whose distribution will form the sampling distribution', required=True)
     parser.add_argument('--granularity', help='Number of values to form the discontinuous sampling distribution (Higher number means higher accuracy)', required=True)
     parser.add_argument('--reduction', help='Factor of reduction of original data set (i.e. 2 means the original dataset is reduced by half)', required=True)
