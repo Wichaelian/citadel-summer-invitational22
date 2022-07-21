@@ -106,7 +106,7 @@ def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str],
         if (cat_col == "emp_length" or cat_col == "addr_state"):
             continue
         nuniquecol = accepted_df[cat_col].nunique()
-        if nuniquecol <= one_hot_threshold or cat_col == "loan_status":
+        if nuniquecol <= one_hot_threshold or cat_col == "loan_status" or cat_col == "sub_grade":
             one_hot = pd.get_dummies(accepted_df[cat_col], prefix = cat_col)
             accepted_df = accepted_df.drop(cat_col,axis = 1)
             categorical_cols_out.remove(cat_col)
