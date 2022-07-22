@@ -1,8 +1,9 @@
 from typing import List, Tuple
+import sklearn
 import zipcodes
 import pandas as pd
 import numpy as np
-from sklearn.cluster import KMeans
+from sklearn.cluster import DBSCAN, KMeans, AgglomerativeClustering
 from sklearn.metrics import silhouette_score
 import matplotlib.pyplot as plt
 import datetime
@@ -13,13 +14,13 @@ import sys
 def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str],
         categorical_cols: List[str], one_hot_threshold: int = 30, transform_zips = True) -> Tuple[pd.DataFrame, List[str], List[str]] :
     """Utility function that takes in a dataframe with the same columns as a "Lending_Club_Accepted_2014_2018.csv" and
-    applies various pre-processing
-        stages to handle null values, encode categorical variables, and retrieve longitude information from zipcodes.
+        applies various pre-processing stages to handle null values, encode categorical variables, and retrieve longitude information from zipcodes.
+        Even though we don't end up using many of these features, we produce a DataFrame that can be used for any later analyses with ease. 
 
     Args:
         accepted_df (pd.DataFrame): A dataframe with the same columns as "Lending_Club_Accepted_2014_2018.csv"
-        numerical_cols (List[str]): A list of strings containing the names of numerical columns whose null values are to be median imputed,
-        besides those already modified (zip code included here)
+        numerical_cols (List[str]): A list of strings containing the names of numerical columns whose null values are to be imputed
+        besides those already modified (zip code is to be included here)
         categorical_cols (List[str]): A list of strings containing the names of categorical columns that are to be encoded using one hot
         encoding if the number of unique values is less than or equal to one_hot_threshold, and label encoded otherwise.
         one_hot_threshold (int): Number of unique vals in categorical column above which labels are label encoded
@@ -28,8 +29,6 @@ def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str],
         accepted_df (pd.DataFrame): An in-place cleaned version of the input dataframe
         numeric_cols_out (List[str]): Names of numerical columns retained from original numerical_cols
         categorical_cols_out (List[str]): Names of categorical columns retained from original categorical_cols
-
-
     """
     numeric_cols_out = set(numeric_cols)
     categorical_cols_out = set(categorical_cols)
@@ -46,11 +45,10 @@ def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str],
         return cached_state_dtis[state]
 
     # Replace no DTI with average DTI of corresponding state
-    # Also replace DTI > 90 as there seem to be spurious values in the dataset
+    # Replace DTI > 90 as there seem to be spurious values in the dataset like 9999
     accepted_df["dti"] = accepted_df.apply(lambda x: replace_dti(x["dti"], x["addr_state"]), axis = 1)
 
-    # Replace no emp_length with < 1 year
-
+    
     emp_to_index = {"< 1 year": 0, "1 year": 1}
     for i in range(2, 11):
         if (i == 10):
@@ -58,18 +56,17 @@ def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str],
         else:
             emp_to_index[f"{i} years"] = i
 
+    # Replace no emp_length with < 1 year, convert all to ints
     accepted_df["emp_length"] = accepted_df["emp_length"].fillna(value="< 1 year")
     accepted_df["emp_length"] = accepted_df["emp_length"].apply(lambda x: emp_to_index[x])
-
-
 
     # Replace no emp_title with "No Employment"
     accepted_df["emp_title"] = accepted_df["emp_title"].fillna(value="No Employment")
     accepted_df["emp_title"] = accepted_df["emp_title"].astype(str)
 
-    cached_zips = {}
     # Convert zip code to longitude latitude estimate, use a cache to avoid repeated searching
     # If no matches found, latitude and longitude are set to 1000.0, 1000.0 (out of bounds)
+    cached_zips = {}
     def get_coords(zip_code: str, mode: str):
         if (zip_code not in cached_zips):
             cached_zips[zip_code] = [1000.0, 1000.0]
@@ -79,7 +76,6 @@ def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str],
 
         return cached_zips[zip_code][0 if mode == "lat" else 1]
 
-    #print(accepted_df.columns)
     if (transform_zips == True):
         accepted_df["zip_code"] = accepted_df["zip_code"].str.rstrip('xx')
         accepted_df["lat"] = accepted_df["zip_code"].apply(lambda x: get_coords(x, mode = "lat"))
@@ -87,9 +83,10 @@ def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str],
 
     accepted_df.drop(["zip_code"], axis = 1, inplace= True)
     numeric_cols_out.remove("zip_code")
+    
     # Replace date fields with days since 01-01-2014
     # Replace missing values in mths_since cols with max value of column
-    # Replace all other missing numerical fields with 0 (these are fields like "total balance of installment accounts"
+    # Replace all other missing numerical fields with 0 (fields like "total balance of installment accounts"
     # which are nan if the borrower has no other installment accounts)
 
     for num_col in numeric_cols_out:
@@ -99,9 +96,6 @@ def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str],
             accepted_df[num_col] = accepted_df[num_col].fillna(value=accepted_df[num_col].max() + 1)
 
         accepted_df[num_col] = accepted_df[num_col].fillna(value=accepted_df[num_col].median())
-
-    # Record log of income
-
 
     # Encode categorical vars using one hot if < 10 vars, else label encode (force label encoding on loan_status)
     # For the state column, we label encode using the state's GDP per capita
@@ -127,7 +121,6 @@ def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str],
             continue
         nuniquecol = accepted_df[cat_col].nunique()
         if 2 < nuniquecol <= one_hot_threshold or cat_col == "loan_status" or cat_col == "sub_grade":
-            print(cat_col)
             one_hot = pd.get_dummies(accepted_df[cat_col], prefix = cat_col)
             if (cat_col != "sub_grade"):
                 accepted_df = accepted_df.drop(cat_col,axis = 1)
@@ -140,7 +133,6 @@ def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str],
     accepted_df.columns = ['_'.join(x.lower().split()) for x in accepted_df.columns]
 
     return accepted_df, list(numeric_cols_out), list(categorical_cols_out)
-
 
 """
 Proximity function based on the cumulative distance of points away from their
@@ -157,6 +149,28 @@ def proximity_fit(coords, labels, k_centers, min_k, max_k):
     for i in range(len(coords)):
         totalDistance += (scipy.spatial.distance.euclidean(coords[i], k_centers[labels[i]])) * (1 + len((k_centers) - min_k)/max_k)
     return totalDistance
+
+def update_subgrade_score(matching_sub_grades: pd.Series, k: int, threshold = 0.5):
+    num_elts = len(matching_sub_grades)
+    val_cnts = matching_sub_grades.value_counts()
+    total_seen = 0
+    for val in val_cnts:
+        total_seen += val
+        if (total_seen >= num_elts * threshold):
+            break
+    
+    return (total_seen) / (k * num_elts)
+
+def sub_grade_score(cluster, clustered_df: pd.DataFrame):
+    clustered_df["cluster"] = cluster.labels_
+    num_clusters = clustered_df["cluster"].nunique()
+    score = 0
+    for k in range(1, num_clusters + 1):
+        for i in range(len(clustered_df["sub_grade"].value_counts())):
+            matching_sub_grades = clustered_df["cluster"][clustered_df["cluster"] == k][clustered_df["sub_grade"] == i]
+            if (len(matching_sub_grades) > 0):
+                score += update_subgrade_score(matching_sub_grades, k, threshold = 0.5)
+    return score
 
 """
 Function that returns the heatmaps
@@ -203,23 +217,25 @@ def cluster_create(col_names, source_path, dest_path,
     scaler = StandardScaler()
 
     k_heat_maps = []
-
-    # Iterating on provided columns to find the strongest clustering based on the silhouette method of ranking
+    epss = np.linspace(0.2, 2, 10)
     for i in range(len(col_names)):
         for j in range(i+1,len(col_names)):
             scaled_dimensions = scaler.fit_transform(clean_df[[col_names[i], col_names[j]]])
-            for k in range(8, 15):
-                kmeans = KMeans(n_clusters=k).fit(scaled_dimensions)
-                score = proximity_fit(scaled_dimensions, kmeans.labels_, kmeans.cluster_centers_, 8, 15)
+            for k in range(15, 30):
+                print(k)
+                clustering = KMeans(n_clusters=k).fit(scaled_dimensions)
+                score = sub_grade_score(clustering, clean_df)
                 if score < strongest_val[1]:
                     strongest_val = (k, score, i , j)
 
     # Recalculating the strongest clustering in lieu of storing all of them due to memory constraints
-    kmeans = KMeans(n_clusters=strongest_val[0]).fit(clean_df[[col_names[strongest_val[2]], col_names[strongest_val[3]]]])
-    clean_df['cluster'] = kmeans.labels_
+    clustering = KMeans(n_clusters=strongest_val[0]).fit(clean_df[[col_names[strongest_val[2]], col_names[strongest_val[3]]]])
+    
+    clean_df['cluster'] = clustering.labels_
 
     clean_df.to_csv(dest_path)
-    clean_df['cluster'] = kmeans.labels_
+    clean_df['cluster'] = clustering.labels_
+
     k_heat_maps = (model_cluster_density(clean_df,strongest_val[0]))
     uniq_vals = len(clean_df["sub_grade"].value_counts())
     x_axis = np.arange(0,uniq_vals)
@@ -235,4 +251,4 @@ def cluster_create(col_names, source_path, dest_path,
 
     return clean_df
 
-cluster_create(["loan_amnt", "fico_range_high"], "test_files/cluster_micro_sample.csv", "test_files/testClustering.csv")
+#cluster_create(["loan_amnt", "fico_range_high"], "test_files/cluster_micro_sample.csv", "test_files/testClustering.csv")
