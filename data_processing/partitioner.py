@@ -73,12 +73,12 @@ if __name__ == '__main__' :
     #args = parser.parse_args()
 
     #partitioner(args.desired_size, args.source_path, args.dest_path)
-    #partitioner(1000, "../../../citadel-summer-invitational22/rawFiles/Lending_Club_Accepted_2014_2018.csv", "test_files/partition_subgrades_1000.csv")
+    partitioner(1000, "../../../citadel-summer-invitational22/rawFiles/Lending_Club_Accepted_2014_2018.csv", "test_files/partition_subgrades_1000.csv")
 
 
     # JANK STUFF I HAD TO DO...
-    sys.path.insert(0, "../")
-    DATA_PATH = os.path.join((os.getcwd()), 'data/')
-    DATA_PROCESSING_PATH = os.path.join((os.getcwd()), 'data_processing/') 
-    desired_size = 30000
-    partitioner(desired_size, f"{DATA_PATH}Lending_Club_Accepted_2014_2018.csv", f"{DATA_PROCESSING_PATH}/test_files/partition_subgrades_{desired_size}.csv")
+    # sys.path.insert(0, "../")
+    # DATA_PATH = os.path.join((os.getcwd()), 'data/')
+    # DATA_PROCESSING_PATH = os.path.join((os.getcwd()), 'data_processing/') 
+    # desired_size = 30000
+    # partitioner(desired_size, f"{DATA_PATH}Lending_Club_Accepted_2014_2018.csv", f"{DATA_PROCESSING_PATH}/test_files/partition_subgrades_{desired_size}.csv")
