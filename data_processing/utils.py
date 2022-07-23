@@ -1,17 +1,16 @@
 from typing import List, Tuple
-import sklearn
 import zipcodes
 import pandas as pd
 import numpy as np
+
 from sklearn.cluster import DBSCAN, KMeans, AgglomerativeClustering
-from sklearn.metrics import silhouette_score
 import matplotlib.pyplot as plt
 import datetime
 import scipy
 from sklearn.preprocessing import StandardScaler
 import sys
-import partitioner
-import sampler
+import data_processing.partitioner
+import data_processing.sampler
 
 def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str],
         categorical_cols: List[str], one_hot_threshold: int = 30, transform_zips = True) -> Tuple[pd.DataFrame, List[str], List[str]] :
@@ -267,7 +266,7 @@ Args:
     dest_path - Relative path from this script to the destination for the newly sampled dataset
 """
 def sample(field_index, granularity, reduction, source_path, dest_path):
-    sampler.create_sample(field_index, granularity, reduction, source_path, dest_path)
+    data_processing.sampler.create_sample(field_index, granularity, reduction, source_path, dest_path)
 #sample(3,50,50,"..\\data\\Lending_Club_Accepted_2014_2018.csv","test_files\\test.csv")
 
 
@@ -282,5 +281,5 @@ Args:
     name_of_file - Name of output file that will be stored in test_files/ . Don't include the .csv suffix
 """
 def partition(desired_size, name_of_file = None):
-    partitioner.partitioner(desired_size, name_of_file, "..")
+    data_processing.partitioner.partitioner(desired_size, name_of_file, "..")
 #partition(1000)
