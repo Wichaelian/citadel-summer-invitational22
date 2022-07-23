@@ -10,12 +10,14 @@ import datetime
 import scipy
 from sklearn.preprocessing import StandardScaler
 import sys
+import partitioner
+import sampler
 
 def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str],
         categorical_cols: List[str], one_hot_threshold: int = 30, transform_zips = True) -> Tuple[pd.DataFrame, List[str], List[str]] :
     """Utility function that takes in a dataframe with the same columns as a "Lending_Club_Accepted_2014_2018.csv" and
         applies various pre-processing stages to handle null values, encode categorical variables, and retrieve longitude information from zipcodes.
-        Even though we don't end up using many of these features, we produce a DataFrame that can be used for any later analyses with ease. 
+        Even though we don't end up using many of these features, we produce a DataFrame that can be used for any later analyses with ease.
 
     Args:
         accepted_df (pd.DataFrame): A dataframe with the same columns as "Lending_Club_Accepted_2014_2018.csv"
@@ -48,7 +50,7 @@ def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str],
     # Replace DTI > 90 as there seem to be spurious values in the dataset like 9999
     accepted_df["dti"] = accepted_df.apply(lambda x: replace_dti(x["dti"], x["addr_state"]), axis = 1)
 
-    
+
     emp_to_index = {"< 1 year": 0, "1 year": 1}
     for i in range(2, 11):
         if (i == 10):
@@ -83,7 +85,7 @@ def clean_accepted_df(accepted_df: pd.DataFrame, numeric_cols: List[str],
 
     accepted_df.drop(["zip_code"], axis = 1, inplace= True)
     numeric_cols_out.remove("zip_code")
-    
+
     # Replace date fields with days since 01-01-2014
     # Replace missing values in mths_since cols with max value of column
     # Replace all other missing numerical fields with 0 (fields like "total balance of installment accounts"
@@ -158,7 +160,7 @@ def update_subgrade_score(matching_sub_grades: pd.Series, k: int, threshold = 0.
         total_seen += val
         if (total_seen >= num_elts * threshold):
             break
-    
+
     return (total_seen) / (k * num_elts)
 
 def sub_grade_score(cluster, clustered_df: pd.DataFrame):
@@ -230,7 +232,7 @@ def cluster_create(col_names, source_path, dest_path,
 
     # Recalculating the strongest clustering in lieu of storing all of them due to memory constraints
     clustering = KMeans(n_clusters=strongest_val[0]).fit(clean_df[[col_names[strongest_val[2]], col_names[strongest_val[3]]]])
-    
+
     clean_df['cluster'] = clustering.labels_
 
     clean_df.to_csv(dest_path)
@@ -251,4 +253,34 @@ def cluster_create(col_names, source_path, dest_path,
 
     return clean_df
 
-#cluster_create(["loan_amnt", "fico_range_high"], "test_files/cluster_micro_sample.csv", "test_files/testClustering.csv")
+
+"""
+Sampling function that will sample the raw csv file according to the distribution of the
+numeric field with an index of field_index. The sampler will create a reduced
+file the size of original_file_size/reduction.
+
+Args:
+    field_index - Index of the NUMERIC field whose distribution will form the sampling distribution
+    granularity - Number of values to form the discontinuous sampling distribution (Higher number means higher accuracy)
+    reduction - Factor of reduction of original data set (i.e. 2 means the original dataset is reduced by half)
+    source_path - Relative path from this script to the original dataset
+    dest_path - Relative path from this script to the destination for the newly sampled dataset
+"""
+def sample(field_index, granularity, reduction, source_path, dest_path):
+    sampler.create_sample(field_index, granularity, reduction, source_path, dest_path)
+#sample(3,50,50,"..\\data\\Lending_Club_Accepted_2014_2018.csv","test_files\\test.csv")
+
+
+"""
+Partitioning function that takes a raw csv file with the same columns and column
+organization as "Lending_Club_Accepted_2014_2018.csv" and returns a reduced
+csv file where all sub_grades are equally represented, each subgrade has
+min(desired_size, min_subgrade_size).
+
+Args:
+    desired_size - Desired size of each subgrade
+    name_of_file - Name of output file that will be stored in test_files/ . Don't include the .csv suffix
+"""
+def partition(desired_size, name_of_file = None):
+    partitioner.partitioner(desired_size, name_of_file, "..")
+#partition(1000)

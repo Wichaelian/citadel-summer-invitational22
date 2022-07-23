@@ -10,7 +10,6 @@ import argparse
 def getDistIndex(curVal, minVal, val_granularity):
     return math.floor((float(curVal) - minVal -1)/max(val_granularity,1))
 
-
 def minMax(field_index, source_path):
     minVal, maxVal = sys.maxsize, 0
     passedFirst = False
@@ -73,7 +72,7 @@ def getApproximateDistributionByField(field_index, granularity, source_path):
 
     return minVal, maxVal, totalCount, buckets
 
-def create_sample(field_index, granularity, reduction, source_path, dest_path, selector):
+def create_sample(field_index, granularity, reduction, source_path, dest_path, selector = lambda x: random.randrange(x)):
     minVal, maxVal = minMax(field_index, source_path)
     cachedVals = [[]] * granularity
     val_granularity = (maxVal - minVal)/granularity
@@ -111,16 +110,13 @@ def create_sample(field_index, granularity, reduction, source_path, dest_path, s
 
 if __name__ == '__main__' :
     parser = argparse.ArgumentParser(description='Sampling the provided file by provided field index. (i.e. python sampler.py --field_index 3'+\
-    ' --granularity 50 --reduction 50 --source_path "../rawFiles/Lending_Club_Rejected_2014_2018.csv" --dest_path "test.csv")')
+    ' --granularity 50 --reduction 50 --source_path "..\\data\\Lending_Club_Rejected_2014_2018.csv" --dest_path "test_files\\test.csv")')
     parser.add_argument('--field_index', help='Index of the NUMERIC field whose distribution will form the sampling distribution', required=True)
     parser.add_argument('--granularity', help='Number of values to form the discontinuous sampling distribution (Higher number means higher accuracy)', required=True)
     parser.add_argument('--reduction', help='Factor of reduction of original data set (i.e. 2 means the original dataset is reduced by half)', required=True)
     parser.add_argument('--source_path', help='Relative path from this script to the original dataset', required=True)
     parser.add_argument('--dest_path', help='Relative path from this script to the destination for the newly sampled dataset', required=True)
-    #parser.add_argument('--random', help = 'The sampling within a granularity be systemic or random, default is systemic', action='store_const', const=42)
 
     args = parser.parse_args()
-
-    selector = lambda x: random.randrange(x) #if args.random is not None else (lambda x: int(x-1))
 
     create_sample(int(args.field_index), int(args.granularity), int(args.reduction), args.source_path, args.dest_path, selector)
